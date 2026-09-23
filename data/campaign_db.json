@@ -1,0 +1,42 @@
+{
+  "contacts": {},
+  "suppression": {
+    "samantha.reed@example.com": {
+      "email": "samantha.reed@example.com",
+      "reason": "Inbound email unsubscribe request",
+      "timestamp": "2026-08-15T18:23:35.143Z"
+    }
+  },
+  "conversations": {
+    "alex.turner@example.com": [
+      {
+        "role": "user",
+        "subject": "Re: Quick question regarding AI automation",
+        "body": "This sounds interesting. I would love to see a demo of your AI workflows. Can we hop on a call?",
+        "messageId": "sim_1786818198945",
+        "intent": "wants_demo",
+        "timestamp": "2026-08-15T18:23:18.946Z"
+      }
+    ],
+    "samantha.reed@example.com": [
+      {
+        "role": "user",
+        "subject": "Re: Quick question regarding AI automation",
+        "body": "Please stop emailing me and unsubscribe me from your list.",
+        "messageId": "sim_1786818215142",
+        "intent": "unsubscribe",
+        "timestamp": "2026-08-15T18:23:35.142Z"
+      }
+    ]
+  },
+  "logs": [],
+  "stats": {
+    "totalProcessed": 0,
+    "successfulSends": 0,
+    "failedSends": 0,
+    "repliesReceived": 2,
+    "interestedProspects": 1,
+    "followUpsScheduled": 0,
+    "suppressedCount": 1
+  }
+}
