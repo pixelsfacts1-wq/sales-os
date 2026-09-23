@@ -55,25 +55,25 @@ app.get('/health', (req, res) => {
 app.post('/webhooks/new-lead', async (req, res) => {
   try {
     const { firstName, lastName, email, phone, source, tags, companyName } = req.body;
-    
+
     if (!email && !phone) {
       return res.status(400).json({ error: 'Either email or phone is required' });
     }
-    
+
     const allTags = [...(tags || [])];
     if (source) {
       allTags.push(source);
     }
-    
+
     const contact = await upsertContact({ firstName, lastName, email, phone, tags: allTags, companyName });
     let emailSent = false;
-    
+
     if (email) {
       const unsubscribeLink = `${process.env.SERVER_URL || 'https://pixelsdensitystudio.com'}/unsubscribe.html?email=${encodeURIComponent(email)}`;
       await sendWelcomeEmail(email, firstName, unsubscribeLink);
       emailSent = true;
     }
-    
+
     res.json({ success: true, contactId: contact.id || contact.contact?.id, emailSent });
   } catch (error) {
     console.error('[Error] new-lead:', error);
@@ -95,12 +95,12 @@ app.post('/webhooks/unsubscribe', async (req, res) => {
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
-    
+
     const contact = await findContactByEmail(email);
     if (contact) {
       await setDND(contact.id, 'Email', true);
     }
-    
+
     res.json({ success: true, message: 'You have been unsubscribed' });
   } catch (error) {
     // If contact not found or other error, still return success to avoid leaking info
@@ -114,12 +114,12 @@ app.post('/webhooks/ghl-contact-created', async (req, res) => {
     const payload = req.body;
     const email = payload.email;
     const firstName = payload.first_name || payload.firstName;
-    
+
     if (email) {
       const unsubscribeLink = `${process.env.SERVER_URL || 'https://pixelsdensitystudio.com'}/unsubscribe.html?email=${encodeURIComponent(email)}`;
       await sendWelcomeEmail(email, firstName, unsubscribeLink);
     }
-    
+
     res.json({ success: true });
   } catch (error) {
     console.error('[Error] ghl-contact-created:', error);
@@ -260,7 +260,7 @@ app.post('/api/social/publish', async (req, res) => {
       return res.status(400).json({ error: 'Post commentary cannot be empty' });
     }
     const result = await publishLinkedInPost({ accountId, commentary, imageUrl });
-    
+
     // Save to queue history as published
     const newPost = addScheduledPost({
       accountId,
@@ -281,12 +281,11 @@ app.post('/api/social/publish', async (req, res) => {
   } catch (error) {
     console.error('[Error] /api/social/publish:', error);
     res.status(500).json({ error: error.message });
-    res.status(500).json({ error: error.message });
   }
 });
 
 // 7. Schedule Post
-app.post('/api/social/sciele', (req, res) => {
+app.post('/api/social/schedule', (req, res) => {
   try {
     const { accountId, accountName, commentary, imageUrl, scheduledTime, topic, framework } = req.body;
     if (!commentary || !scheduledTime) {
@@ -299,7 +298,7 @@ app.post('/api/social/sciele', (req, res) => {
       imageUrl,
       scheduledTime,
       topic,
-      framework || 'Custom',
+      framework,
       status: 'scheduled'
     });
     res.json({ success: true, post });
@@ -349,7 +348,6 @@ function formatRelativeTime(dateInput) {
   return `${diffDays}d ago`;
 }
 
-
 // 1. Real-Time Dashboard Summary & KPIs
 app.get('/api/realtime/summary', async (req, res) => {
   try {
@@ -365,7 +363,7 @@ app.get('/api/realtime/summary', async (req, res) => {
 
     const rawCampaigns = await getCampaigns(account.linkedinAccountUuid);
     const inboxResp = await getSyncedMessages(account.linkedinAccountUuid, { page: 0, size: 50 });
-    
+
     const totalProspects = rawCampaigns.reduce((sum, c) => sum + (c.totalProspectCount || 0), 0) || 5848;
     const activeProspects = rawCampaigns
       .filter(c => c.campaignStatus === 'STARTED')
@@ -414,13 +412,12 @@ app.get('/api/realtime/campaigns', async (req, res) => {
     const accountUuid = req.query.accountUuid || '6b70e96b-cdb5-42ea-8e0f-76698abb5714';
     const raw = await getCampaigns(accountUuid);
 
-    campaigns = raw.map(c => {
+    const campaigns = raw.map(c => {
       const sent = (c.connectionRequestSentCount || 0) + (c.firstEmailSentCount || 0);
       const accepted = c.connectionRequestAcceptedCount || 0;
       const replied = (c.repliedCount || 0) + (c.emailRepliedCount || 0);
       const replyRate = sent > 0 ? ((replied / sent) * 100).toFixed(1) : (c.campaignStatus === 'STARTED' ? '6.8' : '0.0');
 
-      // Shorten name for display readability
       let cleanName = c.name;
       if (cleanName.length > 55) {
         cleanName = cleanName.slice(0, 52) + '...';
@@ -465,7 +462,7 @@ app.get('/api/realtime/inbox', async (req, res) => {
       const company = p.companyName || 'Corporate Client';
       const title = p.jobTitle || p.fullDescription || 'Executive';
       const lastActivity = p.lastActivity || (p.isReplied ? 'REPLIED' : 'CONNECTED');
-      
+
       let tag = 'info';
       if (lastActivity === 'REPLIED' || p.isReplied) tag = 'interested';
       if (lastActivity === 'CONNECTED') tag = 'connected';
@@ -475,7 +472,7 @@ app.get('/api/realtime/inbox', async (req, res) => {
         ? (t.threadedMessages[t.threadedMessages.length - 1]?.text || 'Active conversation thread')
         : (p.lastActivity === 'REPLIED' ? 'Replied to campaign outreach.' : 'Connected on LinkedIn.');
 
-      const timeAgo = formatRelativeTime(p.lastExecutionTime || t.unixTimeSaved9;
+      const timeAgo = formatRelativeTime(p.lastExecutionTime || t.unixTimeSaved);
 
       return {
         id: t.threadId || `sr_${idx}_${p.prospectUuid || Date.now()}`,
@@ -516,14 +513,14 @@ app.get('/api/realtime/today-performance', async (req, res) => {
   try {
     const accountUuid = req.query.accountUuid || '6b70e96b-cdb5-42ea-8e0f-76698abb5714';
     const resp = await getSyncedMessages(accountUuid, { page: 0, size: 20 });
-    
+
     const respondents = (resp.data || []).map((t, idx) => {
       const p = t.prospectData || {};
       const name = t.nameOfPerson || p.fullName || `Prospect #${idx + 1}`;
       const company = p.companyName || 'Enterprise Partner';
       const title = p.jobTitle || 'Decision Maker';
       const timeAgo = formatRelativeTime(p.lastExecutionTime || t.unixTimeSaved);
-      
+
       const snippet = t.threadedMessages && t.threadedMessages.length > 0
         ? t.threadedMessages[t.threadedMessages.length - 1]?.text
         : 'Thanks for reaching out, interested in learning more about your offer.';
@@ -555,35 +552,37 @@ app.get('/api/realtime/today-performance', async (req, res) => {
   }
 });
 
-// 10. Background Scheduler: Check every 60s for due scheduled posts
-setInterval(async () => {
-  try {
-    const duePosts = getDuePosts();
-    for (const post of duePosts) {
-      console.log(`[Scheduler] Auto-publishing due post "${post.topic}" for ${post.accountName}`);
-      try {
-        const result = await publishLinkedInPost({
-          accountId: post.accountId,
-          commentary: post.commentary,
-          imageUrl: post.imageUrl
-        });
-        updatePost(post.id, {
-          status: 'published',
-          publishedAt: new Date().toISOString(),
-          externalPostId: result.postId
-        });
-      } catch (err) {
-        console.error(`[Scheduler] Error publishing post ${post.id}:`, err.message);
-        updatePost(post.id, {
-          status: 'failed',
-          error: err.message
-        });
+// 10. Background Scheduler: Check every 60s for due scheduled posts (local server only)
+if (!process.env.VERCEL) {
+  setInterval(async () => {
+    try {
+      const duePosts = getDuePosts();
+      for (const post of duePosts) {
+        console.log(`[Scheduler] Auto-publishing due post "${post.topic}" for ${post.accountName}`);
+        try {
+          const result = await publishLinkedInPost({
+            accountId: post.accountId,
+            commentary: post.commentary,
+            imageUrl: post.imageUrl
+          });
+          updatePost(post.id, {
+            status: 'published',
+            publishedAt: new Date().toISOString(),
+            externalPostId: result.postId
+          });
+        } catch (err) {
+          console.error(`[Scheduler] Error publishing post ${post.id}:`, err.message);
+          updatePost(post.id, {
+            status: 'failed',
+            error: err.message
+          });
+        }
       }
+    } catch (err) {
+      console.error('[Scheduler] Error checking due posts:', err);
     }
-  } catch (err) {
-    console.error('[Scheduler] Error checking due posts:', err);
-  }
-}, 60000);
+  }, 60000);
+}
 
 const PORT = process.env.PORT || 3000;
 if (!process.env.VERCEL) {
@@ -603,4 +602,3 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
-
